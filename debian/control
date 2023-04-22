@@ -48,7 +48,7 @@ Build-Depends: ant [!hppa !hurd-any !kfreebsd-any],
                python3-dev,
                python3-numpy,
                python3-bs4,
-               cuda-libraries-11-8-dev,
+               cuda-libraries-dev-11-8,
                cuda-drivers-dev-11-8,
                zlib1g-dev
 Standards-Version: 4.7.0
@@ -79,7 +79,7 @@ Depends: libjs-jquery,
          libcub-dev,
          libthrust-dev,
          cuda-libraries-11-8,
-         cuda-libraries-11-8-dev,
+         cuda-libraries-dev-11-8,
          ${misc:Depends},
          ${shlibs:Depends},
          ${python3:Depends}
