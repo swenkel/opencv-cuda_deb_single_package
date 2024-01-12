@@ -1,3 +1,8 @@
+opencv-cuda (4.8.1-1) stable; urgency=low
+
+  * update to version 4.8.1
+
+ -- FirstName LastName <firstname.lastname@name.tld>  Thu, 28 Sep 2023 10:00:00 +0000
 opencv-cuda (4.8.0-1) stable; urgency=low
 
   * update to version 4.8.0
