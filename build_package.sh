@@ -1,8 +1,8 @@
 #!/bin/bash
 
-version=4.8.1
-sha256_main_source="62f650467a60a38794d681ae7e66e3e8cfba38f445e0bf87867e2f2cdc8be9d5"
-sha256_contrib_source="0c082a0b29b3118f2a0a1856b403bb098643af7b994a0080f402a12159a99c6e"
+version=4.9.0
+sha256_main_source="ddf76f9dffd322c7c3cb1f721d0887f62d747b82059342213138dc190f28bc6c"
+sha256_contrib_source="8952c45a73b75676c522dd574229f563e43c271ae1d5bbbd26f8e2b6bc1a4dae"
 
 echo "Creating build folders"
 if [ -d "./build" ]
