@@ -1,0 +1,17 @@
+Don't fail the Java API documentation on doclint errors
+
+Some generated Java sources keep Doxygen-only tags from the C++ documentation (e.g. @retval
+and @remarks in org/opencv/ximgproc/Ximgproc.java), which javadoc's doclint reports as errors,
+so building the documentation with Java enabled fails ("Javadoc returned 1").
+
+--- a/modules/java/jar/build.xml.in
++++ b/modules/java/jar/build.xml.in
+@@ -44,7 +44,7 @@
+       failonerror="true"
+       encoding="UTF-8" charset="UTF-8" docencoding="UTF-8"
+       @CMAKE_CONFIG_OPENCV_JAVADOC_LINK@
+-      additionalparam="--allow-script-in-comments"
++      additionalparam="--allow-script-in-comments -Xdoclint:none"
+       >
+       <bottom>
+          <![CDATA[

@@ -3,7 +3,24 @@
 export DEB_BUILD_MAINT_OPTIONS=optimize=-lto
 export DH_VERBOSE=1
 
+include /usr/share/dpkg/pkg-info.mk
+
 BUILDDIR = obj-$(DEB_HOST_MULTIARCH)
+
+# set by build_package.sh
+OPENCV_WITH_CUDA ?= ON
+OPENCV_CUDA_VERSION ?= 13.4
+OPENCV_USE_MKL ?= ON
+OPENCV_WITH_JAVA ?= OFF
+OPENCV_WITH_PYTHON ?= ON
+OPENCV_WITH_EXAMPLES ?= OFF
+OPENCV_WITH_DOCS ?= OFF
+
+OPENCV_MAJOR := $(firstword $(subst ., ,$(DEB_VERSION_UPSTREAM)))
+CUDA_PKG_VERSION := $(subst .,-,$(OPENCV_CUDA_VERSION))
+CUDA_HOME := /usr/local/cuda-$(OPENCV_CUDA_VERSION)
+# CUDA 13 dropped everything below 7.5; these are the architectures nvcc 13.3 and 13.4 both support
+CUDA_ARCH_BIN ?= 7.5,8.0,8.6,8.7,8.8,8.9,9.0,10.0,10.3,11.0,12.0,12.1
 
 CMAKE_ARCH_FLAGS :=
 
@@ -40,11 +57,6 @@ CMAKE_ARCH_FLAGS :=
 #CMAKE_ARCH_FLAGS += -DWITH_1394=OFF -DWITH_V4L=OFF
 #endif
 
-# Java support
-ifeq (,$(findstring $(DEB_HOST_ARCH), hppa hurd-i386 kfreebsd-i386 kfreebsd-amd64))
-CMAKE_ARCH_FLAGS += -DBUILD_JAVA=ON
-endif
-
 # mitigate compiler OOM during build
 ifeq ($(DEB_HOST_ARCH),mipsel)
 export DEB_BUILD_OPTIONS=noopt
@@ -57,17 +69,19 @@ export JAVA_HOME=/usr/lib/jvm/default-java
 # NOTES:
 # 1. we set WITH_QT=OFF because files under modules/highgui/src/files_Qt/Milky
 #    have been filtered, which are required for the QT build.
+# 2. BLAS/LAPACK is passed explicitly through LAPACK_LIBRARIES, which bypasses OpenCV's own
+#    detection (it would pick up the shared MKL). MKL is linked statically: the shared MKL
+#    libraries dlopen their CPU kernels, which fails with "Cannot load libmkl_avx2.so or
+#    libmkl_def.so" when Python/Java load OpenCV with RTLD_LOCAL.
 CMAKE_FLAGS += \
 	-DANT_EXECUTABLE=/usr/bin/ant \
 	-DENABLE_BUILD_HARDENING=ON \
 	-DOPENCV_ENABLE_MEMORY_SANITIZER=ON \
-	-DBUILD_EXAMPLES=OFF \
 	-DBUILD_WITH_DEBUG_INFO=OFF\
-	-DBUILD_JAVA=ON \
-	-DBUILD_PROTOBUF=OFF \
+	-DBUILD_JAVA=$(OPENCV_WITH_JAVA) \
 	-DBUILD_TEST=OFF \
 	-DBUILD_PERF_TESTS=OFF \
-	-DBUILD_DOCS=OFF \
+	-DBUILD_DOCS=$(OPENCV_WITH_DOCS) \
 	-DBUILD_PACKAGE=ON \
 	-DBUILD_opencv_dnn=ON \
 	-DBUILD_opencv_face=ON \
@@ -84,34 +98,15 @@ CMAKE_FLAGS += \
 	-DCMAKE_SKIP_RPATH=ON \
 	-DCMAKE_VERBOSE_MAKEFILE=OFF \
 	-DENABLE_PRECOMPILED_HEADERS=OFF \
-	-DBUILD_C_EXAMPLES=OFF \
-	-DINSTALL_C_EXAMPLES=OFF	\
-	-DINSTALL_PYTHON_EXAMPLES=OFF \
 	-DOPENCV_EXTRA_MODULES_PATH="$(CURDIR)/contrib/modules" \
 	-DOPENCV_MATHJAX_RELPATH=/usr/share/javascript/mathjax/ \
 	-DOPENCV_SKIP_PYTHON_LOADER=ON \
 	-DOPENCV_GENERATE_PKGCONFIG=ON \
-	-DBUILD_opencv_python3=ON \
+	-DBUILD_opencv_python3=$(OPENCV_WITH_PYTHON) \
+	-DBUILD_opencv_python_bindings_generator=$(OPENCV_WITH_PYTHON) \
 	-DWITH_ADE=ON \
 	-DWITH_CAROTENE=OFF \
-	-DWITH_CUDA=ON \
-	-DWITH_NVCUVID=ON\
-	-DCUDA_ARCH_BIN=6.0,6.1,6.2,7.0,7.2,7.5,8.0,8.6,8.7,8.9,9.0 \
-	-DCUDA_FAST_MATH=ON \
-	-DWITH_CUBLAS=ON \
-	-DWITH_CUFFT=ON \
 	-DWITH_CLP=ON \
-	-DOPENCV_DNN_CUDA=ON \
-	-DBUILD_opencv_cudaarithm=ON \
-	-DBUILD_opencv_cudabgsegm=ON \
-	-DBUILD_opencv_cudacodec=ON \
-	-DBUILD_opencv_cudafeatures2d=ON \
-	-DBUILD_opencv_cudafilters=ON \
-	-DBUILD_opencv_cudaimgproc=ON \
-	-DBUILD_opencv_cudaobjdetect=ON \
-	-DBUILD_opencv_cudaoptflow=ON \
-	-DBUILD_opencv_cudastereo=ON \
-	-DBUILD_opencv_cudawarping=ON \
 	-DWITH_EIGEN=ON \
 	-DWITH_FAST_MATH=ON \
 	-DWITH_FFMPEG=ON \
@@ -134,7 +129,6 @@ CMAKE_FLAGS += \
 	-DWITH_OPENGL=ON \
 	-DWITH_PNG=ON	\
 	-DWITH_PROTOBUF=ON \
-	-DPROTOBUF_UPDATE_FILES=ON \
 	-DPROTOBUF_MODULE_COMPATIBLE=ON \
 	-DWITH_PVAPI=ON	\
 	-DWITH_QT=ON \
@@ -147,19 +141,104 @@ CMAKE_FLAGS += \
 	-DWITH_V4L=OFF \
 	-DWITH_LIBV4L=OFF \
 	-DWITH_XINE=OFF	\
-	-DLAPACK_CBLAS_H="mkl_cblas.h" \
-        -DLAPACK_LAPACKE_H="mkl_lapack.h" \
-	-DLAPACK_LAPACKE_INCLUDE_DIR=/usr/include/mkl \
-	-DMKL_LAPACKE_INCLUDE_DIR=/usr/include/mkl \
-	-DMKL_INCLUDE_DIR=/usr/include/mkl \
-	-DMKL_ROOT_DIR=/usr/lib/x86_64-linux-gnu/mkl \
-	-DLAPACK_IMPL=MKL \
 	-DCPU_BASELINE_REQUIRE=SSE2,SSE3,SSE4_2 \
 	-DCPU_DISPATCH=FP16,FMA3,AVX,AVX2,AVX512_ICL \
 	-DWITH_TBB=ON \
 	-DBUILD_TBB=ON \
 	-DBUILD_OPENJPEG=OFF \
 	-DCMAKE_TRACE_MODE=ON \
+	-DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
+
+ifeq ($(OPENCV_USE_MKL),ON)
+MKL_LIBDIR := /usr/lib/x86_64-linux-gnu
+CMAKE_FLAGS += \
+	-DLAPACK_INCLUDE_DIR=/usr/include/mkl \
+	-DLAPACK_CBLAS_H=mkl_cblas.h \
+	-DLAPACK_LAPACKE_H=mkl_lapack.h \
+	-DLAPACK_LIBRARIES="-Wl,--start-group;$(MKL_LIBDIR)/libmkl_intel_lp64.a;$(MKL_LIBDIR)/libmkl_sequential.a;$(MKL_LIBDIR)/libmkl_core.a;-Wl,--end-group;-lpthread;-lm;-ldl" \
+
+else
+CMAKE_FLAGS += \
+	-DLAPACK_INCLUDE_DIR="/usr/include/x86_64-linux-gnu/openblas-pthread;/usr/include" \
+	-DLAPACK_CBLAS_H=cblas.h \
+	-DLAPACK_LAPACKE_H=lapacke.h \
+	-DLAPACK_LIBRARIES=/usr/lib/x86_64-linux-gnu/libopenblas.so \
+
+endif
+
+# OpenCV 5 no longer ships opencv-caffe.proto, so the dnn protobuf sources can't be regenerated
+# for the system protobuf - use the bundled protobuf that matches the pre-generated files instead
+ifeq ($(OPENCV_MAJOR),5)
+CMAKE_FLAGS += -DBUILD_PROTOBUF=ON -DPROTOBUF_UPDATE_FILES=OFF
+else
+CMAKE_FLAGS += -DBUILD_PROTOBUF=OFF -DPROTOBUF_UPDATE_FILES=ON
+endif
+
+ifeq ($(OPENCV_WITH_EXAMPLES),ON)
+CMAKE_FLAGS += \
+	-DBUILD_EXAMPLES=ON \
+	-DINSTALL_BIN_EXAMPLES=ON \
+	-DOPENCV_SAMPLES_BIN_INSTALL_PATH=lib/opencv$(OPENCV_MAJOR)/examples \
+	-DINSTALL_C_EXAMPLES=ON \
+	-DINSTALL_PYTHON_EXAMPLES=$(OPENCV_WITH_PYTHON) \
+
+else
+CMAKE_FLAGS += -DBUILD_EXAMPLES=OFF -DINSTALL_BIN_EXAMPLES=OFF -DINSTALL_C_EXAMPLES=OFF -DINSTALL_PYTHON_EXAMPLES=OFF
+endif
+
+ifeq ($(OPENCV_WITH_CUDA),ON)
+CMAKE_FLAGS += \
+	-DWITH_CUDA=ON \
+	-DCUDA_TOOLKIT_ROOT_DIR=$(CUDA_HOME) \
+	-DCMAKE_LIBRARY_PATH=$(CUDA_HOME)/lib64/stubs \
+	-DWITH_NVCUVID=ON\
+	-DCUDA_ARCH_BIN=$(CUDA_ARCH_BIN) \
+	-DCUDA_ARCH_PTX=12.1 \
+	-DCUDA_FAST_MATH=ON \
+	-DWITH_CUBLAS=ON \
+	-DWITH_CUFFT=ON \
+	-DOPENCV_DNN_CUDA=ON \
+	-DBUILD_opencv_cudaarithm=ON \
+	-DBUILD_opencv_cudabgsegm=ON \
+	-DBUILD_opencv_cudacodec=ON \
+	-DBUILD_opencv_cudafeatures2d=ON \
+	-DBUILD_opencv_cudafilters=ON \
+	-DBUILD_opencv_cudaimgproc=ON \
+	-DBUILD_opencv_cudaobjdetect=ON \
+	-DBUILD_opencv_cudaoptflow=ON \
+	-DBUILD_opencv_cudastereo=ON \
+	-DBUILD_opencv_cudawarping=ON \
+
+CUDA_DEPENDS := cuda-toolkit-$(CUDA_PKG_VERSION), cuda-libraries-$(CUDA_PKG_VERSION), libcudnn9-cuda-13
+else
+CMAKE_FLAGS += -DWITH_CUDA=OFF
+CUDA_DEPENDS :=
+endif
+
+# dependencies and virtual packages of the optional parts, passed to dh_gencontrol
+# (items must not contain spaces - they are joined with ", ")
+OPENCV_DEPENDS :=
+OPENCV_PROVIDES :=
+ifeq ($(OPENCV_WITH_PYTHON),ON)
+OPENCV_PROVIDES += python3-opencv
+endif
+ifeq ($(OPENCV_WITH_JAVA),ON)
+# the jar is compiled for the build's default JDK, so it needs at least that runtime
+JAVA_MAJOR := $(shell sed -n 's/^JAVA_VERSION="\([0-9]*\).*/\1/p' $(JAVA_HOME)/release)
+ifeq ($(JAVA_MAJOR),)
+$(error cannot determine the Java version from $(JAVA_HOME)/release)
+endif
+OPENCV_DEPENDS += default-jre-headless|java$(JAVA_MAJOR)-runtime-headless
+OPENCV_PROVIDES += libopencv4.5d-jni libopencv4.5-java
+endif
+ifeq ($(OPENCV_WITH_DOCS),ON)
+OPENCV_DEPENDS += libjs-mathjax
+OPENCV_PROVIDES += libopencv-doc
+endif
+comma := ,
+empty :=
+space := $(empty) $(empty)
+join_deps = $(subst $(space),$(comma)$(space),$(strip $(1)))
 
 %:
 	dh $@
@@ -178,14 +257,16 @@ override_dh_auto_configure:
 
 
 override_dh_auto_build:
-	# documentation
-	# dh_auto_build -B $(BUILDDIR) -- doxygen -j$(shell nproc)
 ifneq (,$(findstring $(DEB_HOST_ARCH), mipsel))
 	# dynamically linked
 	dh_auto_build  -B $(BUILDDIR) -- -j$(shell nproc)
 else
 	# dynamically linked
 	dh_auto_build -B $(BUILDDIR) -- -j$(shell nproc)
+endif
+ifeq ($(OPENCV_WITH_DOCS),ON)
+	# documentation
+	dh_auto_build -B $(BUILDDIR) -- doxygen
 endif
 
 override_dh_auto_test:
@@ -195,10 +276,34 @@ else
 	-LD_LIBRARY_PATH=$(shell realpath $(BUILDDIR))/lib dh_auto_test
 endif
 
-ifeq ($(DEB_HOST_ARCH),mipsel)
+# no -dbgsym package and no dwz pass: the debug info of the CUDA binaries is several GB
 override_dh_dwz:
-	true # mipsel would FTBFS, possibly due to out-of-memory
-endif
+
+override_dh_strip:
+	dh_strip --no-automatic-dbgsym
 
 override_dh_auto_install:
 	dh_auto_install -B $(BUILDDIR)
+
+# NVIDIA's packages ship no shlibs/symbols files; CUDA dependencies come from cuda:Depends instead
+override_dh_shlibdeps:
+ifeq ($(OPENCV_WITH_CUDA),ON)
+	# libcuda.so.1 is part of the NVIDIA driver, which a build container doesn't have - point at the toolkit's stub
+	mkdir -p debian/cuda-stubs
+	ln -sf $(CUDA_HOME)/lib64/stubs/libcuda.so debian/cuda-stubs/libcuda.so.1
+	dh_shlibdeps -l$(CURDIR)/debian/cuda-stubs -- --ignore-missing-info
+else
+	dh_shlibdeps
+endif
+
+override_dh_python3:
+	dh_python3
+ifeq ($(OPENCV_WITH_PYTHON),ON)
+	dh_numpy3
+endif
+
+override_dh_gencontrol:
+	dh_gencontrol -- \
+		-Vcuda:Depends="$(CUDA_DEPENDS)" \
+		-Vopencv:Depends="$(call join_deps,$(OPENCV_DEPENDS))" \
+		-Vopencv:Provides="$(call join_deps,$(OPENCV_PROVIDES))"
