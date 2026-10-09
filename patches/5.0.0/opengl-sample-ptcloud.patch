@@ -1,0 +1,26 @@
+Fix the OpenGL test data generator sample of OpenCV 5.0.0
+
+loadMesh() and the triangle rasterization API moved to the ptcloud module in OpenCV 5,
+but the sample still only includes/links geometry, so building the examples
+(-DBUILD_EXAMPLES=ON with OpenGL) fails with "'loadMesh' was not declared in this scope".
+
+--- a/samples/opengl/CMakeLists.txt
++++ b/samples/opengl/CMakeLists.txt
+@@ -14,6 +14,7 @@
+   opencv_imgproc
+   opencv_imgcodecs
+   opencv_geometry
++  opencv_ptcloud
+   opencv_videoio
+   opencv_highgui)
+ ocv_check_dependencies(${OPENCV_OPENGL_SAMPLES_REQUIRED_DEPS})
+--- a/samples/opengl/opengl_testdata_generator.cpp
++++ b/samples/opengl/opengl_testdata_generator.cpp
+@@ -20,6 +20,7 @@
+ #include "opencv2/imgproc.hpp"
+ #include "opencv2/highgui.hpp"
+ #include "opencv2/geometry.hpp"
++#include "opencv2/ptcloud.hpp"
+
+ using namespace std;
+ using namespace cv;
